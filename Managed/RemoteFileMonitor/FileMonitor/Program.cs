@@ -66,7 +66,7 @@ namespace FileMonitor
                         targetPID,          // ID of process to inject into
                         injectionLibrary,   // 32-bit library to inject (if target is 32-bit)
                         injectionLibrary,   // 64-bit library to inject (if target is 64-bit)
-                        channelName        // the parameters to pass into injected library
+                        channelName         // the parameters to pass into injected library
                     );
                 }
                 // Create a new process and then inject into it
@@ -76,13 +76,13 @@ namespace FileMonitor
                     // start and inject into a new process
                     EasyHook.RemoteHooking.CreateAndInject(
                         targetExe,          // executable to run
-                        "Powershell 'Get-Content \"C:\\Users\\markd\\Documents\\GitHub\\EasyHook-Tutorials\\Managed\\RemoteFileMonitor\\RemoteFileMonitor.sln\" ; $Host.UI.RawUI.ReadKey(\"NoEcho,IncludeKeyDown\")'",                 // command line arguments for target
+                        "",                 // command line arguments for target
                         0,                  // additional process creation flags to pass to CreateProcess
                         EasyHook.InjectionOptions.DoNotRequireStrongName, // allow injectionLibrary to be unsigned
                         injectionLibrary,   // 32-bit library to inject (if target is 32-bit)
                         injectionLibrary,   // 64-bit library to inject (if target is 64-bit)
                         out targetPID,      // retrieve the newly created process ID
-                        channelName        // the parameters to pass into injected library
+                        channelName         // the parameters to pass into injected library
                     );
                 }
             }

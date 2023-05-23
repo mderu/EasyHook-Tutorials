@@ -117,12 +117,13 @@ namespace FileMonitorHook
                 this);
 
             // Activate hooks on all threads except the current thread
-            //createFileHook.ThreadACL.SetExclusiveACL(new Int32[] { 0 });
+            createFileHook.ThreadACL.SetExclusiveACL(new Int32[] { 0 });
+            // TODO: Re-enable ReadFile_Hook. See impl.
             //readFileHook.ThreadACL.SetExclusiveACL(new Int32[] { 0 });
-            //writeFileHook.ThreadACL.SetExclusiveACL(new Int32[] { 0 });
+            writeFileHook.ThreadACL.SetExclusiveACL(new Int32[] { 0 });
             createProcessHook.ThreadACL.SetExclusiveACL(new Int32[] { 0 }); // Thread.CurrentThread.ManagedThreadId  ????
 
-            _server.ReportMessage("CreateFile, ReadFile and WriteFile hooks installed");
+            _server.ReportMessage("CreateProcessW, CreateFile, and WriteFile hooks installed");
 
             // Wake up the process (required if using RemoteHooking.CreateAndInject)
             RemoteHooking.WakeUpProcess();
@@ -318,19 +319,6 @@ namespace FileMonitorHook
                 }
                 throw;
             }
-            finally
-            {
-                lock (this._messageQueue)
-                {
-                    this._messageQueue.Enqueue(
-                                string.Format("[{0}:{1}]: ERROR ({2}, {3}) \"{4}\"",
-                                RemoteHooking.GetCurrentProcessId(),
-                                RemoteHooking.GetCurrentThreadId(),
-                                Marshal.GetLastWin32Error(),
-                                retValue,
-                                filename));
-                }
-            }
         }
 
         #endregion
@@ -365,10 +353,10 @@ namespace FileMonitorHook
         /// <returns></returns>
         [DllImport("kernel32.dll", SetLastError = true, CallingConvention = CallingConvention.StdCall)]
         static extern bool ReadFile(
-            IntPtr hFile, 
+            IntPtr hFile,
             IntPtr lpBuffer,
-            uint nNumberOfBytesToRead, 
-            out uint lpNumberOfBytesRead, 
+            uint nNumberOfBytesToRead,
+            out uint lpNumberOfBytesRead,
             IntPtr lpOverlapped);
 
         /// <summary>
@@ -388,7 +376,12 @@ namespace FileMonitorHook
             IntPtr lpOverlapped)
         {
             bool result = false;
-            //lpNumberOfBytesRead = 0;
+
+            // TODO: There's some bug here where `lpNumberOfBytesRead` is assigned null from the syscall,
+            //       so we end up with a Null Exception when attempting to set this value to anything.
+            //
+            //       I tried setting this to IntPtr and UIntPtr but got hangs. Needs more discovery.
+            lpNumberOfBytesRead = 0;
 
             // Call original first so we have a value for lpNumberOfBytesRead
             result = ReadFile(hFile, lpBuffer, nNumberOfBytesToRead, out lpNumberOfBytesRead, lpOverlapped);
@@ -634,18 +627,6 @@ namespace FileMonitorHook
             [In] ref STARTUPINFOEX lpStartupInfo,
             out PROCESS_INFORMATION lpProcessInformation)
         {
-            //
-            //
-            //
-            //
-            // TODO: Create an alternative to EasyHook's CreateAndInject that only takes in CreateProcessW inputs, and exposes them all the way to its interanl CreateProcessW call.
-            //
-            //
-            //
-            //
-            //
-
-
             // The process should stay suspended iff the original execution called for it to be suspended.
             // Otherwise, the injection should unsuspend the process.
             bool leaveSuspended = (dwCreationFlags & DwCreationFlags.CREATE_SUSPENDED) > 0;
@@ -667,6 +648,7 @@ namespace FileMonitorHook
 
             string dllFullPath = Assembly.GetAssembly(GetType()).Location;
 
+            // TODO: Expose this through the actual API instead of reflection.
             MethodInfo dynMethod = typeof(RemoteHooking).GetMethod("InjectEx", BindingFlags.NonPublic | BindingFlags.Static);
             dynMethod.Invoke(null, new object[] {
                 NativeAPI.GetCurrentProcessId(),
@@ -680,20 +662,6 @@ namespace FileMonitorHook
                 /*InjectionOptions.DoNotRequireStrongName*/ true,
                 new object[] {ChannelName }
             });
-
-            // Inject the hooking DLL (and resume the process)
-            RemoteHooking.Inject(
-                lpProcessInformation.dwProcessId,
-                InjectionOptions.Default,
-                dllFullPath,
-                dllFullPath,
-                // Custom arguments
-                ChannelName);
-
-            /*if (!leaveSuspended)
-            {
-                ResumeThread(lpProcessInformation.hThread);
-            }*/
 
             try
             {
